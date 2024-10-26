@@ -8,8 +8,8 @@ LUCI_DEPENDS:=+php8 +php8-cgi +php8-mod-session +zoneinfo-core +zoneinfo-asia +s
 
 
 PKG_NAME:=luci-app-rtawrt-injector
-PKG_VERSION:=1.0
-PKG_RELEASE:=1
+PKG_VERSION:=1.0.0
+PKG_RELEASE:=beta
 
 define Package/$(PKG_NAME)
 	$(call Package/luci/webtemplate)
