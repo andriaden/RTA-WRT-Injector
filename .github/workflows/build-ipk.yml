@@ -42,16 +42,16 @@ jobs:
         uses: openwrt/gh-action-sdk@main
         env:
           ARCH: ${{ matrix.arch }}
-          FEEDNAME: rtawrt-injector
+          FEEDNAME: rtawrt
           PACKAGES: luci-app-rtawrt-injector
           NO_REFRESH_CHECK: true
 
       - name: Compress
         run: |
-          tar -c -z -f rtawrt-injector_${{ matrix.arch }}.tar.gz -C bin/packages/${{ matrix.arch }}/rtawrt-injector .
+          tar -c -z -f rtawrt_injector_${{ matrix.arch }}.tar.gz -C bin/packages/${{ matrix.arch }}/rtawrt .
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            rtawrt-injector_${{ matrix.arch }}.tar.gz
+            rtawrt_injector_${{ matrix.arch }}.tar.gz
