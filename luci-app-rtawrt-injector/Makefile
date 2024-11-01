@@ -66,6 +66,7 @@ define Package/$(PKG_NAME)/postrm
 	if [ -d /www/$NAMAPAKET ] ; then
 		rm -rf /www/$NAMAPAKET
 		rm -rf /usr/share/$NAMAPAKET
+		rm -rf /etc/config/$NAMAPAKET
 	fi
 	unset NAMAPAKET
 exit 0
