@@ -1,0 +1,4 @@
+
+config rtawrt-injector 'main'
+	option status 'stopped'
+

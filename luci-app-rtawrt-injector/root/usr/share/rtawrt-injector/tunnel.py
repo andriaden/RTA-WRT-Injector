@@ -28,11 +28,11 @@ class Tun(injector):
 		sni = config['sni']['server_name']
 		return sni
 	def proxy(self,config):
-	    proxyhost = config['config']['proxyip']
-	    proxyport = int(config['config']['proxyport'])
+	    proxyhost = config['config']['proxyServer']
+	    proxyport = int(config['config']['proxyPort'])
 	    return [proxyhost,proxyport]
 	def conn_mode(self,config):
-		mode = config['mode']['connection_mode']
+		mode = config['config']['modeconfig']
 		return mode
 	def tunneling(self,client,sockt):
 		connected = True
@@ -114,7 +114,7 @@ class Tun(injector):
 		sockt.close()
 	def logs(self,log):
 		logtime = str(time.ctime()).split()[3]
-		logfile = open('logs.txt','a')
+		logfile = open('/usr/share/rtawrt-injector/logs.txt','a')
 		logfile.write(f'[{logtime}] : {str(log)}\n')
 if __name__=='__main__':
 	start = Tun()

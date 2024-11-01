@@ -1,138 +1,200 @@
 <?php
 
-$config_data = parse_ini_file('/usr/share/rtawrt-injector/settings.ini', true);
-
-function tunnel() {
-	exec("nohup python3 /usr/share/rtawrt-injector/tunnel.py > /dev/null 2>&1 &");
-	sleep(1);
-	exec("nohup python3 /usr/share/rtawrt-injector/ssh.py 1 > /dev/null 2>&1 &");
-	saveLog("is connecting to the internet");
-	for ($i = 1; $i <= 3; $i++) {
-		sleep(3);
-		exec("cat logs.txt 2>/dev/null | grep \"CONNECTED SUCCESSFULLY\"|awk '{print $4}'|tail -n1", $var);
-		if (implode($var) == "SUCCESSFULLY") {
-			exec("screen -dmS GProxy bash -c 'gproxy; exec sh'");
-			saveLog("TERHUBUNG!");
-			break;
-		} else {
-			saveLog($i.". Reconnect 3s");
-			exec("nohup python3 /usr/share/rtawrt-injector/ssh.py 1 > /dev/null 2>&1 &");
-		}
-		saveLog("Failed!");
-	}
+function json_response($data) {
+	$resp = array(
+		'status' => 'OK',
+		'data' => $data
+	);
+	header("Content-Type: application/json; charset=UTF-8");
+	echo json_encode($resp, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 }
 
-function start() {
-	if (file_exists("logs-2.txt")) unlink("logs-2.txt");
-	saveLog("Menjalankan RTA-WRT Injector");
-	if (empty($ssh_host = $config_data['ssh']['host'])) {
-		saveLog("Anda Belum Membuat Profile");
-	} else {
-		stop();
-		$sock_mode = $config_data['mode']['sock_mode'];
-		if ($sock_mode == "1") {
-			exec("route -n | grep -i 0.0.0.0 | head -n1 | awk '{print $2}'", $ipmodem);
-			exec('echo "ipmodem='.implode($ipmodem).'" > /usr/share/rtawrt-injector/ipmodem.txt');
-			$ssh_host = $config_data['ssh']['host'];
-			exec("cat /usr/share/rtawrt-injector/ipmodem.txt | grep -i ipmodem | cut -d= -f2 | tail -n1", $route);
-			exec("ip tuntap add dev tun1 mode tun");
-			exec("ifconfig tun1 10.0.0.1 netmask 255.255.255.0");
-			tunnel();
-			exec("route add 8.8.8.8 gw ".implode($route)." metric 0");
-			exec("route add 8.8.4.4 gw ".implode($route)." metric 0");
-			exec("route add ".$ssh_host." gw ".implode($route)." metric 0");
-			exec("route add default gw 10.0.0.2 metric 0");
-		} else if ($sock_mode == "2") {
-			tunnel();
-		}
-		exec("rm -r logs.txt 2>/dev/null");
-		file_put_contents("/usr/bin/ping-rtawrt-injector", "#!/bin/bash\n#rtawrt-injector\nhttping m.google.com\n");
-		exec("chmod +x /usr/bin/ping-rtawrt-injector");
-		exec("/usr/bin/ping-rtawrt-injector > /dev/null 2>&1 &");
-	}
-	file_put_contents("/etc/crontabs/root", "# BEGIN AUTOREKONEK RTA-WRT\n*/1 * * * *  autorekonek-rtawrt-injector\n# END AUTOREKONEK RTA-WRT\n", FILE_APPEND);
-	exec("sed -i '/^$/d' /etc/crontabs/root 2>/dev/null");
-	exec("/etc/init.d/cron restart");
+
+function startLog() {
+    $logFile = '/usr/share/rtawrt-injector/logs-2.txt';
+    if (!file_exists($logFile)) {
+        file_put_contents($logFile, '');
+    }
+    $datalog = file_get_contents($logFile);
+    json_response($datalog);
 }
 
-function stop() {
-	$sock_mode = $config_data['mode']['sock_mode'];
-	exec("screen -S GProxy -X quit");
-	if ($sock_mode == "1") {
-		$ssh_host = $config_data['ssh']['host'];
-		exec("cat /usr/share/rtawrt-injector/ipmodem.txt | grep -i ipmodem | cut -d= -f2 | tail -n1", $route);
-		exec("killall -q badvpn-tun2socks ssh ping-rtawrt-injector sshpass httping python3");
-		exec('route del 8.8.8.8 gw "'.implode($route).'" metric 0 2>/dev/null');
-		exec('route del 8.8.4.4 gw "'.implode($route).'" metric 0 2>/dev/null');
-		exec('route del "'.$ssh_host.'" gw "'.implode($route).'" metric 0 2>/dev/null');
-		exec("ip link delete tun1 2>/dev/null");
-	} else if ($sock_mode == "2") {
-		exec("iptables -t nat -F OUTPUT 2>/dev/null");
-		exec("iptables -t nat -F PROXY 2>/dev/null");
-		exec("iptables -t nat -F PREROUTING 2>/dev/null");
-		exec("killall -q redsocks python3 ssh ping-rtawrt-injector sshpass httping fping screen");
-	}
-	exec("/etc/init.d/dnsmasq restart 2>/dev/null");
-	exec('sed -i "/^# BEGIN AUTOREKONEK RTA-WRT/,/^# END AUTOREKONEK RTA-WRT/d" /etc/crontabs/root > /dev/null');
-	exec("/etc/init.d/cron restart");
+function startTunnel() {
+    exec("nohup /usr/share/rtawrt-injector/rtawrt.sh start > /dev/null 2>&1 &");
+    $logFile = '/usr/share/rtawrt-injector/logs-2.txt';
+
+    while (true) {
+        if (file_exists($logFile)) {
+            $logContent = file_get_contents($logFile);
+
+            if (strpos($logContent, 'is connecting to the internet') !== false) {
+                $status = 'CONNECTING';
+                break;
+            }
+        }
+        sleep(1);
+    }
+
+    $output = [
+        'status' => $status
+    ];
+    json_response($output);
+}
+
+function stopTunnel() {
+    exec("nohup /usr/share/rtawrt-injector/rtawrt.sh stop > /dev/null 2>&1 &");
+    $logFile = '/usr/share/rtawrt-injector/logs-2.txt';
+
+    while (true) {
+        if (file_exists($logFile)) {
+            $logContent = file_get_contents($logFile);
+
+            if (strpos($logContent, 'Stopped RTA-WRT Sukses...') !== false) {
+                $status = 'STOPPED';
+                break;
+            }
+        }
+        sleep(1);
+    }
+
+    $output = [
+        'status' => $status
+    ];
+    json_response($output);
+}
+
+function getStatus() {
+    $inifile = parse_ini_file('/usr/share/rtawrt-injector/settings.ini', true); 
+	exec("uci get rtawrt-injector.main.status", $STATUS);
+    $responseData = [
+        'status' => implode($STATUS)
+    ];
+	json_response($responseData);
+}
+
+function updateStatus() {
+	$json = json_decode(file_get_contents('php://input'), true);
+	$data = $json['data']['status'];
+	exec("uci set rtawrt-injector.main.status=${data}");
+	exec("uci commit rtawrt-injector");
+}
+
+function getConfig() {
+	header('Content-Type: application/json');
+    $filePath = '/usr/share/rtawrt-injector/settings.ini';
+
+    if (file_exists($filePath)) {
+        $configData = parse_ini_file($filePath, true); 
+
+        header('Content-Type: application/json');
+
+        $responseData = [
+            'tun2socks' => $configData['mode']['tun2socks'],
+            'memoryCleaner' => $configData['mode']['memoryCleaner'],
+            'autoReconnect' => $configData['mode']['autoReconnect'],
+            'pingLoop' => $configData['mode']['pingLoop'],
+            'mode' => $configData['config']['mode'],
+			'modeconfig' => $configData['config']['modeconfig'],
+			'enableHttpProxy' => $configData['config']['enableHttpProxy'],
+            'payload' => $configData['config']['payload'],
+            'proxyServer' => $configData['config']['proxyServer'],
+            'proxyPort' => $configData['config']['proxyPort'],
+            'serverHost' => $configData['ssh']['serverHost'],
+            'serverPort' => $configData['ssh']['serverPort'],
+            'username' => $configData['ssh']['username'],
+            'password' => $configData['ssh']['password'],
+			'udpgw' => $configData['ssh']['udpgw'],
+            'sni' => $configData['sni']['server_name']
+        ];
+
+		json_response($responseData);
+    } else {
+		header('HTTP/1.1 404 Not Found');
+        echo json_encode(['status' => 'error', 'message' => 'File not found.']);
+    }
 }
 
 
 function saveConfig() {
-    $connection_mode = explode("|", $_POST["connection_mode"]);
-	$sock_mode = $_POST["sock_mode"];
-	$ssh_host = $_POST["ssh_host"];
-	$ssh_port = $_POST["ssh_port"];
-	$ssh_udp = $_POST["ssh_udp"];
-	$ssh_username = $_POST["ssh_username"];
-	$ssh_password = $_POST["ssh_password"];
-    $proxy_ip = $_POST["proxy_ip"];
-    $proxy_port = $_POST["proxy_port"];
-	$sni_server_name = $_POST["sni_server_name"];
-	$payload = $_POST["payload"];
-	if ($sock_mode == "1") {
-		$badvpn = "badvpn-tun2socks --tundev tun1 --netif-ipaddr 10.0.0.2 --netif-netmask 255.255.255.0 --socks-server-addr 127.0.0.1:1080 --udpgw-remote-server-addr 127.0.0.1:".$ssh_udp." --udpgw-connection-buffer-size 65535 --udpgw-transparent-dns &";
-	} else if ($sock_mode == "2") {
-		file_put_contents("/etc/redsocks.conf", base64_decode("YmFzZSB7Cglsb2dfZGVidWcgPSBvZmY7Cglsb2dfaW5mbyA9IG9mZjsKCXJlZGlyZWN0b3IgPSBpcHRhYmxlczsKfQpyZWRzb2NrcyB7Cglsb2NhbF9pcCA9IDAuMC4wLjA7Cglsb2NhbF9wb3J0ID0gODEyMzsKCWlwID0gMTI3LjAuMC4xOwoJcG9ydCA9IDEwODA7Cgl0eXBlID0gc29ja3M1Owp9CnJlZHNvY2tzIHsKCWxvY2FsX2lwID0gMTI3LjAuMC4xOwoJbG9jYWxfcG9ydCA9IDgxMjQ7CglpcCA9IDEwLjAuMC4xOwoJcG9ydCA9IDEwODA7Cgl0eXBlID0gc29ja3M1Owp9CnJlZHVkcCB7CiAgICBsb2NhbF9pcCA9IDEyNy4wLjAuMTsgCiAgICBsb2NhbF9wb3J0ID0gVURQR1c7CiAgICBpcCA9IDEwLjAuMC4xOwogICAgcG9ydCA9IDEwODA7CiAgICBkZXN0X2lwID0gOC44LjguODsgCiAgICBkZXN0X3BvcnQgPSA1MzsgCiAgICB1ZHBfdGltZW91dCA9IDMwOwogICAgdWRwX3RpbWVvdXRfc3RyZWFtID0gMTgwOwp9CmRuc3RjIHsKCWxvY2FsX2lwID0gMTI3LjAuMC4xOwoJbG9jYWxfcG9ydCA9IDUzMDA7Cn0="));
-		if (isset($ssh_udp)) {
-			file_put_contents("/etc/redsocks.conf", str_replace("UDPGW", $ssh_udp, file_get_contents("/etc/redsocks.conf")));
-		} else {
-			error_log("Error: \$ssh_udp is not defined.");
-		}
-		$badvpn = "#!/bin/bash\n#rtawrt-injector\niptables -t nat -N PROXY 2>/dev/null\niptables -t nat -A PREROUTING -i br-lan -p tcp -j PROXY\niptables -t nat -A PROXY -d 127.0.0.0/8 -j RETURN\niptables -t nat -A PROXY -d 192.168.0.0/16 -j RETURN\niptables -t nat -A PROXY -d 0.0.0.0/8 -j RETURN\niptables -t nat -A PROXY -d 10.0.0.0/8 -j RETURN\niptables -t nat -A PROXY -p tcp -j REDIRECT --to-ports 8123\niptables -t nat -A PROXY -p tcp -j REDIRECT --to-ports 8124\niptables -t nat -A PROXY -p udp --dport 53 -j REDIRECT --to-ports ".$ssh_udp."\nredsocks -c /etc/redsocks.conf -p /var/run/redsocks.pid &";
-	}
-	file_put_contents("/usr/bin/gproxy", $badvpn."\n");
-	exec("chmod +x /usr/bin/gproxy");
-	if ($connection_mode[0] !== "mode-http") {
-		$sProxy = "proxyip = \nproxyport = ";
-		$proxy_ip = "-";
-    	$proxy_port = "-";
-	} else {
-		$sProxy = "proxyip = ".$proxy_ip."\nproxyport = ".$proxy_port;
-	}
-	file_put_contents("/usr/share/rtawrt-injector/settings.ini", "[mode]\n\nconnection_mode = ".$connection_mode[1]."\nsock_mode = ".$sock_mode."\n\n[config]\npayload = ".$payload."\n".$sProxy."\n\nauto_replace = 1\n\n[ssh]\nhost = ".$ssh_host."\nport = ".$ssh_port."\nusername = ".$ssh_username."\npassword = ".$ssh_password."\nudp = ".$ssh_udp."\n\n[sni]\nserver_name = ".$sni_server_name."\n");
-	echo "Sett Profile Sukses";
+	$json = json_decode(file_get_contents('php://input'), true);
+
+	$tun2socks = $json['data']['tun2socks'];
+	$memoryCleaner = $json['data']['memoryCleaner'];
+	$autoReconnect = $json['data']['autoReconnect'];
+	$pingLoop = $json['data']['pingLoop'];
+	$mode = $json['data']['mode'];
+	$modeconfig = $json['data']['modeconfig'];
+	$enableHttpProxy = $json['data']['enableHttpProxy'];
+	$payload = $json['data']['payload'];
+	$proxyServer = $json['data']['proxyServer'];
+	$proxyPort = $json['data']['proxyPort'];
+	$serverHost = $json['data']['serverHost'];
+	$serverPort = $json['data']['serverPort'];
+	$username = $json['data']['username'];
+	$password = $json['data']['password'];
+	$udpgw = $json['data']['udpgw'];
+	$sni = $json['data']['sni'];
+
+    $data = "[mode]\n";
+    $data .= "tun2socks = $tun2socks\n";
+    $data .= "memoryCleaner = $memoryCleaner\n";
+    $data .= "autoReconnect = $autoReconnect\n";
+    $data .= "pingLoop = $pingLoop\n\n";
+    $data .= "[config]\n";
+    $data .= "mode = $mode\n";
+	$data .= "modeconfig = $modeconfig\n";
+    $data .= "enableHttpProxy = $enableHttpProxy\n";
+    $data .= "payload = $payload\n";
+    $data .= "proxyServer = $proxyServer\n";
+    $data .= "proxyPort = $proxyPort\n\n";
+    $data .= "auto_replace = 1\n\n";
+    $data .= "[ssh]\n";
+    $data .= "serverHost = $serverHost\n";
+    $data .= "serverPort = $serverPort\n";
+    $data .= "username = $username\n";
+    $data .= "password = $password\n";
+	$data .= "udpgw = $udpgw\n\n";
+    $data .= "[sni]\n";
+    $data .= "server_name = $sni\n";
+
+    $file_path = '/usr/share/rtawrt-injector/settings.ini';
+
+
+    if (file_put_contents($file_path, $data) !== false) {
+		header('Content-Type: application/json');
+        echo json_encode(['status' => 'success', 'message' => 'File saved successfully.']);
+    } else {
+		header('HTTP/1.1 404 Not Found');
+        echo json_encode(['status' => 'error', 'message' => 'Failed to save file.']);
+    }
 }
 
-function saveLog($str) {
-	$str = "[".date("H:i:s")."] ".$str."\n";
-	file_put_contents("logs-2.txt", $str, FILE_APPEND);
-	echo $str;
-}
 
-$action = $_POST["action"];
-switch ($action) {
-	case "start";
-		start();
+$json = json_decode(file_get_contents('php://input'), true);
+switch ($json['action']) {
+	case "log":
+		startLog();
 		break;
-	case "stop";
-		if (file_exists("logs-2.txt")) unlink("logs-2.txt");
-		saveLog("Menghentikan RTA-WRT Injector");
-		stop();
-		saveLog("Stop Sukses");
+    case "startTunnel":
+        startTunnel();
+        break;
+    case "stopTunnel":
+        stopTunnel();
+        break;
+	case "getStatus":
+		getStatus();
 		break;
-	case "saveConfig";
-		saveConfig();
+	case "updateStatus":
+		updateStatus();
 		break;
+    case "saveConfig":
+        saveConfig();
+        break;
+    case "getConfig":
+        getConfig();
+        break;
+    case "cleanLog";
+        file_put_contents('/usr/share/rtawrt-injector/logs-2.txt', "[".date("H:i:s")."] Clear Log. Sucess");
+        break;
 }
 ?>

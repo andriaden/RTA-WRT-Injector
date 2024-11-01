@@ -72,7 +72,7 @@ class sshRunn:
 		    		ip = socket.gethostbyname(host)
 		    	except:
 		    		ip = host
-		    thread=threading.Thread(target=self.ssh_client,args=('1080',ip,port,user,password))
+		    thread=threading.Thread(target=self.ssh_client,args=('2505',ip,port,user,password))
 		    thread.start()
 		except ConnectionRefusedError:            
 		    soc.close()
@@ -82,7 +82,7 @@ class sshRunn:
 
 	def logs(self,log):
 		logtime = str(time.ctime()).split()[3]
-		logfile = open('logs.txt','a')
+		logfile = open('/usr/share/rtawrt-injector/logs.txt','a')
 		logfile.write(f'[{logtime}] : {str(log)}\n')
 if __name__=='__main__':		        
 	
@@ -96,14 +96,14 @@ if __name__=='__main__':
 		start.logs(f'{R}ERROR {e}')
 		sys.exit()
 	
-	host = config['ssh']['host'] 
-	port = config['ssh']['port']
+	host = config['ssh']['serverHost'] 
+	port = config['ssh']['serverPort']
 	user = config['ssh']['username']
 	password = config['ssh']['password']
 	if host:
 		start.create_connection(host,port,user,password)    
 	else:
-		start.logs(f'{R}ssh field is empty {GR}')
+		start.logs(f'{R}ssh field is empty in file  /usr/share/rtawrt-injector/settings.ini {GR}')
 		sys.exit
 	
 

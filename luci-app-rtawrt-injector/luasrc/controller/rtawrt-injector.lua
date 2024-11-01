@@ -1,4 +1,4 @@
-module("luci.controller.libernet-plus", package.seeall)
+module("luci.controller.rtawrt-injector", package.seeall)
 function index()
-entry({"admin","services","libernet-plus"}, template("libernet-plus"), _("Libernet Plus"), 11).leaf=true
+entry({"admin","services","rtawrt-injector"}, template("rtawrt-injector"), _("RTAWRT Injector"), 11).leaf=true
 end
