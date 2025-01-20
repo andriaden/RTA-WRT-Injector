@@ -20,45 +20,85 @@ function startLog() {
 }
 
 function startTunnel() {
+    // Hapus log sebelumnya
+    file_put_contents('/usr/share/rtawrt-injector/logs-2.txt', '');
+
+    // Jalankan tunnel
     exec("nohup /usr/share/rtawrt-injector/rtawrt.sh start > /dev/null 2>&1 &");
     $logFile = '/usr/share/rtawrt-injector/logs-2.txt';
 
-    while (true) {
+    $startTime = time();
+    $timeout = 30; // Batas waktu 30 detik
+    $status = 'FAILED';
+
+    while (time() - $startTime < $timeout) {
         if (file_exists($logFile)) {
             $logContent = file_get_contents($logFile);
 
-            if (strpos($logContent, 'is connecting to the internet') !== false) {
-                $status = 'CONNECTING';
+            // Tambahkan beberapa kondisi status
+            if (
+                strpos($logContent, 'is connecting to the internet') !== false
+            ) {
+                $status = 'CONNECTED';
+                break;
+            }
+
+            // Cek jika ada error
+            if (strpos($logContent, 'Error:') !== false) {
+                $status = 'ERROR';
                 break;
             }
         }
-        sleep(1);
+        usleep(500000); // Kurangi beban CPU dengan sleep 0.5 detik
     }
 
+    // Update status di konfigurasi
+    exec("uci set rtawrt-injector.main.status=CONNECTED");
+    exec("uci commit rtawrt-injector");
+
     $output = [
-        'status' => $status
+        'status' => $status,
+        'message' => $status === 'CONNECTED' ? 'Tunnel berhasil dimulai' : 'Gagal memulai tunnel'
     ];
     json_response($output);
 }
 
 function stopTunnel() {
+    // Jalankan perintah stop
     exec("nohup /usr/share/rtawrt-injector/rtawrt.sh stop > /dev/null 2>&1 &");
     $logFile = '/usr/share/rtawrt-injector/logs-2.txt';
 
-    while (true) {
+    $startTime = time();
+    $timeout = 20; // Batas waktu 20 detik
+    $status = 'FAILED';
+
+    while (time() - $startTime < $timeout) {
         if (file_exists($logFile)) {
             $logContent = file_get_contents($logFile);
 
-            if (strpos($logContent, 'Stopped RTA-WRT Sukses...') !== false) {
+            if (
+                strpos($logContent, 'Stopped RTA-WRT Sukses...') !== false
+            ) {
                 $status = 'STOPPED';
                 break;
             }
+
+            // Cek jika ada error
+            if (strpos($logContent, 'Error:') !== false) {
+                $status = 'ERROR';
+                break;
+            }
         }
-        sleep(1);
+        usleep(500000); // Kurangi beban CPU dengan sleep 0.5 detik
     }
 
+    // Update status di konfigurasi
+    exec("uci set rtawrt-injector.main.status=STOPPED");
+    exec("uci commit rtawrt-injector");
+
     $output = [
-        'status' => $status
+        'status' => $status,
+        'message' => $status === 'STOPPED' ? 'Tunnel berhasil dihentikan' : 'Gagal menghentikan tunnel'
     ];
     json_response($output);
 }
