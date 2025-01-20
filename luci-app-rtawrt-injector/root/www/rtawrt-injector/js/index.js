@@ -79,7 +79,7 @@ async function apiCall(endpoint, data) {
 async function loadStatus() {
     try {
         const { data } = await apiCall('api.php', { action: 'getStatus' });
-        const isRunning = data.status === 'CONNECTED';
+        const isRunning = data.status === 'running';
 
         const startButton = document.getElementById(ELEMENT_IDS.startButton);
         const stopButton = document.getElementById(ELEMENT_IDS.stopButton);
