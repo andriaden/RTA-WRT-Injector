@@ -1,0 +1,43 @@
+name: Release Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - v*
+
+jobs:
+  build:
+    name: ${{ matrix.arch }} build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - arm_cortex-a7_neon-vfpv4
+          - aarch64_cortex-a53
+          - aarch64_cortex-a72
+          - aarch64_generic
+          - x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        uses: openwrt/gh-action-sdk@main
+        env:
+          ARCH: ${{ matrix.arch }}
+          FEEDNAME: rtawrt
+          PACKAGES: luci-app-rtawrt-injector
+          NO_REFRESH_CHECK: true
+
+      - name: Compress
+        run: |
+          tar -c -z -f rtawrt_injector_${{ matrix.arch }}.tar.gz -C bin/packages/${{ matrix.arch }}/rtawrt .
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rtawrt_injector_${{ matrix.arch }}.tar.gz
